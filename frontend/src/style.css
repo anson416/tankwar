@@ -1,0 +1,599 @@
+/* style.css — TankWar design system. Dark-first, light via [data-theme].
+   Mobile-first: phone layout is the base, ≥720px widens the tile grid, ≥900px
+   widens the page. Touch targets ≥44px (--tap). No animation spam: only short
+   color/transform transitions, killed entirely under prefers-reduced-motion.
+
+   Scope: the shell (header, status chip, tab bar, panels) + the shared control
+   primitives every controller reuses (buttons, badges, fields, banners) + the
+   three mode surfaces: training stat tiles and SVG charts, the letterboxed
+   arena canvas with its escalation bar, the scoreboard rows and the play HUD.
+   Controllers own their dynamic colors inline (HP fill, phase tint); this file
+   owns geometry, spacing and the theme-token plumbing. */
+
+:root {
+  --bg: #0e1116;
+  --bg-elev: #161b22;
+  --bg-elev2: #1d242d;
+  --border: #2a313b;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --accent: #58a6ff;
+  --accent-soft: rgba(88, 166, 255, 0.18);
+  --red: #ff7b72; /* damage / danger / sudden death */
+  --good: #4bd1ca;
+  --warn: #e3b341;
+  --stop: #8957e5;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --tap: 44px;
+  /* Arena + HUD (reserved so later sections never invent ad-hoc sizes). */
+  --arena-max: 900px; /* world width 900 u maps 1:1 to CSS px at zoom 1 */
+  --hud-chip-bg: var(--bg-elev2);
+  /* Native widgets (select dropdowns, checkboxes, scrollbars) must follow the
+     active theme, not the OS preference. */
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: #f6f8fa;
+  --bg-elev: #ffffff;
+  --bg-elev2: #eef1f4;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text-dim: #656d76;
+  --accent: #0969da;
+  --accent-soft: rgba(9, 105, 218, 0.14);
+  --red: #cf222e;
+  --good: #34918c;
+  --warn: #9a6700;
+  --stop: #6e40c9;
+  --shadow: 0 8px 24px rgba(31, 35, 40, 0.14);
+  color-scheme: light;
+}
+
+/* ===================== Reset & base ===================== */
+* {
+  box-sizing: border-box;
+}
+/* Several components set display:flex/grid, which outranks the UA sheet —
+   force [hidden] so tab/phase/banner toggles can never be overridden. */
+[hidden] {
+  display: none !important;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  -webkit-text-size-adjust: 100%;
+}
+button {
+  font-family: inherit;
+}
+/* Keyboard parity: the header chip is a <span role=button> and every control
+   is hand-built, so the default UA focus ring cannot be relied on. */
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.tab:focus-visible,
+.num:focus-visible,
+#chip-sound:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ===================== Shell ===================== */
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.app-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+}
+.app-subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0;
+  flex-basis: 100%;
+}
+/* Persistent status chip: worker liveness (loading → ready → running) plus
+   the tfjs backend name — the one thing every tab needs to know about. */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-elev2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  min-height: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.status-chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.status-chip .backend {
+  color: var(--text);
+}
+.status-chip.ready .dot {
+  background: var(--good);
+}
+.status-chip.running .dot {
+  background: var(--warn);
+}
+.header-spacer {
+  flex: 1;
+}
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  font-size: 13px;
+  padding: 6px 10px;
+  transition: background-color 150ms ease;
+}
+.icon-btn:hover {
+  background: var(--bg-elev2);
+}
+/* The sound widget: a badge with role=button (Enter/Space wired by hand in
+   HeaderController), so it needs pointer affordance and hover parity here,
+   plus the same 44px tap target as the two buttons beside it. */
+#chip-sound {
+  cursor: pointer;
+  user-select: none;
+  min-height: var(--tap);
+  padding: 8px 12px;
+}
+#chip-sound:hover {
+  background: var(--bg-elev2);
+}
+
+/* Tab bar — sticky on mobile so switching modes never scrolls away. */
+.tabbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.tabbar .tab {
+  min-height: var(--tap);
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+  padding: 10px 4px;
+}
+.tabbar .tab[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+main {
+  flex: 1;
+  padding: 14px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+.tab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: section-in 160ms ease both;
+}
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ===================== Panels, fields, controls ===================== */
+.panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.panel-title {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+/* One horizontal control row (train start/stop + badges, hint lines). */
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  min-height: var(--tap);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 80ms ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--bg-elev2);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+/* Toggle/primary/danger states: .primary = the one main action on a panel,
+   .stop = "this is running, halt it", .danger = destructive confirm. */
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn.stop {
+  background: var(--stop);
+  border-color: var(--stop);
+  color: #fff;
+}
+.btn.danger {
+  border-color: var(--red);
+  color: var(--red);
+}
+.btn:disabled,
+.num:disabled,
+.icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  background: var(--bg-elev2);
+  min-height: 26px;
+}
+.badge.on {
+  color: var(--good);
+  border-color: var(--good);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.num {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  font-size: 13px;
+  min-height: var(--tap);
+  width: 100%;
+}
+.num.invalid {
+  border-color: var(--red);
+}
+input[type="range"] {
+  width: 100%;
+  min-height: var(--tap);
+  accent-color: var(--accent);
+}
+/* The three checkboxes (DDQN, aim assist, auto-restart) sit in label rows —
+   size them to the label text and keep the row itself tappable. */
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--accent);
+}
+/* Slider readouts (speed ×N, τ difficulty) sit next to their track. */
+output {
+  min-width: 48px;
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.45;
+}
+/* Config form: auto-fill grid of label+input fields; Apply-only rebuild, so
+   the .invalid highlight (set by the controller) is the rejection surface. */
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+.setup-error {
+  color: var(--red);
+  font-size: 12px;
+  min-height: 16px;
+  margin: 0;
+}
+
+/* ===================== Train: stat tiles ===================== */
+/* 12 live counters. Phones get 2-up, tablets 4, desktop 6 — every tile stays
+   one line because the values abbreviate (1.23M / 12.3k) on the controller. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.tile {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; /* a long tabular value must not blow the track out */
+}
+.tile-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-value {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tile-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* ===================== Train: charts ===================== */
+/* The SVGs carry viewBox 0 0 200 60 + preserveAspectRatio="none": the plot
+   stretches to the box, so this height IS the aspect ratio. */
+.chart-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chart-title {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.chart {
+  width: 100%;
+  height: 60px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.chart-baseline {
+  stroke: var(--border);
+  stroke-width: 0.5;
+}
+.chart-line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.chart-refline {
+  stroke: var(--text-dim);
+  stroke-width: 0.75;
+  stroke-dasharray: 3 3;
+}
+/* Win-rate legend: swatch names the trace, the dashed tail names the 1/N
+   chance line the chart draws underneath it. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.legend .swatch {
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+  border-radius: 1px;
+}
+.legend .s-main {
+  background: var(--accent);
+}
+
+/* ===================== Arena canvas ===================== */
+/* Both lanes' canvases letterbox to the world's own 900×700 ratio. The
+   controllers set width/max-width/border inline; this block adds what they
+   leave out (intrinsic-ratio lock, centering, depth). */
+.tab-section > canvas {
+  height: auto; /* the width/height attributes are logical, not layout */
+  aspect-ratio: 900 / 700;
+  margin-inline: auto;
+  box-shadow: var(--shadow);
+}
+
+/* ===================== Watch: escalation + scoreboard ===================== */
+/* Toolbar: one wrapping row on any screen wide enough for two fields — the
+   panel default stacks them, which wastes a phone screenful of height. */
+.watch-toolbar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.watch-toolbar .field {
+  flex: 1 1 140px;
+  min-width: 130px;
+}
+.watch-toolbar .btn {
+  flex: 0 0 auto;
+}
+
+/* Escalation bar: the fill's default color is painted inline by the
+   controller, so the phase overrides must out-rank inline to win. Phase 1
+   keeps the amber ramp, sudden death drains red. */
+#watch-esc[data-phase="1"] #watch-esc-fill {
+  background: var(--warn) !important;
+}
+#watch-esc[data-phase="2"] #watch-esc-fill {
+  background: var(--red) !important;
+}
+#watch-esc-label {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scoreboard rows: layout is inline (the controller rebuilds them per cast),
+   so this carries the state styling a rebuild can inherit for free. */
+.score-row {
+  font-size: 13px;
+}
+.score-row:last-child {
+  border-bottom: none; /* the controller draws a per-row separator */
+}
+.score-row.dead {
+  opacity: 0.45;
+}
+.score-row.dead .name {
+  text-decoration: line-through;
+}
+
+/* ===================== Play: HUD ===================== */
+/* Bars/chips are plain DOM under the canvas (screen-reader legible); the
+   controller drives the fill widths per tick, this owns the tween + accents. */
+#play-hp-fill,
+#play-reload-fill {
+  transition: width 90ms linear;
+}
+#play-powerups .badge {
+  border-color: var(--good);
+  color: var(--good);
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+#play-kd {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* ===================== Banners ===================== */
+/* Result banners (#watch-banner / #play-banner) and the play escalation
+   banner carry their frames inline; these add the shared typography. */
+#watch-banner,
+#play-banner {
+  font-size: 13px;
+  text-align: center;
+}
+#play-esc-banner {
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+/* ===================== Misc ===================== */
+
+@media (min-width: 720px) {
+  .tiles {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  main {
+    padding: 20px;
+  }
+  .app-subtitle {
+    flex-basis: auto;
+  }
+}
+
+@media (min-width: 1000px) {
+  .tiles {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  /* Two charts side by side once there is room — four stacked full-width
+     charts push the config form a full screen down. */
+  .chart-block {
+    flex: 1 1 40%;
+  }
+  .panel:has(.chart-block) {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .panel:has(.chart-block) > .panel-title {
+    flex-basis: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

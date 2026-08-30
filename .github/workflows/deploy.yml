@@ -1,0 +1,80 @@
+name: Deploy frontend/ to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Unit tests (engine, encodings, protocol)
+        run: npm run test
+      - name: Build (type-check, bundle)
+        run: npm run build
+      # --- Deploy gates: a build that compiles is not a build that runs.
+      #     These checks must pass BEFORE the Pages artifact is uploaded.
+      - name: Static build-artifact check (no leaked placeholders)
+        run: npm run build:check
+      - name: Cache Playwright browser
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Runtime smoke test (boots dist/, gates deploy)
+        run: npm run test:smoke
+      - name: Upload smoke artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deploy-smoke-${{ github.run_id }}
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

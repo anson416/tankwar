@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Inline data-URI favicon: avoids a /favicon.ico request that would 404
+         (the smoke test asserts zero console errors). -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23111'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23f43' stroke-width='6'/%3E%3Cpath d='M50 12v22M50 66v22M12 50h22M66 50h22' stroke='%23f43' stroke-width='8' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='7' fill='%23f43'/%3E%3C/svg%3E"
+    />
+    <meta
+      name="description"
+      content="TankWar (戰車大戰) with in-browser reinforcement learning: train a fleet of DQN tank agents live, watch them duel, or play against them yourself."
+    />
+    <title>TankWar · 戰車大戰 · RL</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

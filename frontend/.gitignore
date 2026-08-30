@@ -1,0 +1,9 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.vite/
+*.local
+.DS_Store
+# generated at build time by scripts/copy-tfjs-wasm.mjs
+public/tfjs-wasm/

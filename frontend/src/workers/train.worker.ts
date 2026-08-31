@@ -916,12 +916,24 @@ async function applyTestFixture(): Promise<void> {
   scheduleTick();
 }
 
+// One backend ladder per WORKER REALM, not per module evaluation: Safari/WebKit
+// (≤26.x) re-evaluates a module-worker entry when a dynamically imported chunk
+// imports it back (Vite's backend chunks do), and two concurrent
+// tf.setBackend("webgpu") calls race inside tfjs's engine — the loser silently
+// resolves false, drops to webgl, and the mid-init backend swap crashes the
+// trainer. Only the global scope is shared across the two evaluations, so the
+// memo lives there; the PROMISE is assigned synchronously (`??= await` would
+// still race — the second eval must observe a non-null cache immediately).
+const workerScope = globalThis as typeof globalThis & {
+  __tfBackendInit?: Promise<string>;
+};
+
 // Promise-gated init: NOTHING may create a tensor before the backend resolves
 // (a tensor without a backend throws). Any message arriving first is queued and
 // drained after init completes.
 const initPromise: Promise<void> = (async () => {
   try {
-    backend = await initBackend();
+    backend = await (workerScope.__tfBackendInit ??= initBackend());
     if (isTestMode()) await applyTestFixture();
     else await rebuild(cfg);
     // Kernel warmup BEFORE the handshake (see WARMUP_FLEET_TICKS): the first

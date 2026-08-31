@@ -916,24 +916,24 @@ async function applyTestFixture(): Promise<void> {
   scheduleTick();
 }
 
-// One backend ladder per WORKER REALM, not per module evaluation: Safari/WebKit
-// (≤26.x) re-evaluates a module-worker entry when a dynamically imported chunk
-// imports it back (Vite's backend chunks do), and two concurrent
-// tf.setBackend("webgpu") calls race inside tfjs's engine — the loser silently
-// resolves false, drops to webgl, and the mid-init backend swap crashes the
-// trainer. Only the global scope is shared across the two evaluations, so the
-// memo lives there; the PROMISE is assigned synchronously (`??= await` would
-// still race — the second eval must observe a non-null cache immediately).
-const workerScope = globalThis as typeof globalThis & {
-  __tfBackendInit?: Promise<string>;
-};
+// Safari/WebKit (≤26.x) re-evaluates a module-worker entry when a dynamically
+// imported chunk imports it back (Vite's tfjs backend chunks do). The second
+// evaluation must stay a GHOST: a second init would race tf.setBackend (the
+// duplicate webgpu attempt silently loses, falls to webgl, and the mid-init
+// backend swap crashes the trainer) and would boot a second trainer against
+// the same realm-global tfjs registry. Module-scope state is per-instance;
+// only the global scope spans both evaluations, so the sentinel lives there
+// and is captured before any side effect below runs.
+const bootScope = globalThis as typeof globalThis & { __trainWorkerBooted?: boolean };
+const firstEvaluation = !bootScope.__trainWorkerBooted;
+bootScope.__trainWorkerBooted = true;
 
 // Promise-gated init: NOTHING may create a tensor before the backend resolves
 // (a tensor without a backend throws). Any message arriving first is queued and
 // drained after init completes.
-const initPromise: Promise<void> = (async () => {
+const initPromise: Promise<void> = firstEvaluation ? (async () => {
   try {
-    backend = await (workerScope.__tfBackendInit ??= initBackend());
+    backend = await initBackend();
     if (isTestMode()) await applyTestFixture();
     else await rebuild(cfg);
     // Kernel warmup BEFORE the handshake (see WARMUP_FLEET_TICKS): the first
@@ -945,7 +945,7 @@ const initPromise: Promise<void> = (async () => {
   } catch (err) {
     initError = err instanceof Error ? err.message : String(err);
   }
-})();
+})() : Promise.resolve();
 
 const queue: WorkerReq[] = [];
 let draining = false;
@@ -978,7 +978,10 @@ async function drain(): Promise<void> {
   }
 }
 
-ctx.onmessage = (e: MessageEvent<WorkerReq>): void => {
-  queue.push(e.data);
-  void drain();
-};
+// Ghost evaluation leaves instance 1's wiring in place (see bootScope above).
+if (firstEvaluation) {
+  ctx.onmessage = (e: MessageEvent<WorkerReq>): void => {
+    queue.push(e.data);
+    void drain();
+  };
+}

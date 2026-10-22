@@ -35,7 +35,7 @@ openssl>=3.0
 opt-einsum=3.4.0=pypi_0
 optree=0.20.0=pypi_0
 packaging=26.3=pypi_0
-pillow=12.3.0=pypi_0
+pillow=13.0.0=pypi_0
 pip=26.2.2=pypi_0
 protobuf=7.36.2=pypi_0
 pygame=2.6.1=pypi_0

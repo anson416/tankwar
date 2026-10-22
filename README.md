@@ -53,7 +53,7 @@ FONG, Shi Yuk
 2. Execute the following commands in the Terminal:
 ```
 cd TankWar/gym-tankwar 
-conda create --name tankwar python=3.10 -y 
+conda create --name tankwar python=3.12 -y 
 conda activate tankwar 
 pip install -e .
 ```  
@@ -90,7 +90,7 @@ to get all information of the command line arguments.)
 
 5. Before training and testing the agent, execute:
 ```
-pip install tensorflow==2.10.0
+pip install tensorflow==2.21.0
 ```
 6. To train the agent, execute:
 ```
